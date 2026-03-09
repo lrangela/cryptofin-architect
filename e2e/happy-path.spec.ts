@@ -5,28 +5,33 @@ test.describe('Happy Path - Flujo completo de usuario', () => {
     // PASO 1: Carga de la página principal (que redirige a /news)
     await page.goto('/');
     
-    // Al ser Analog y tener redirectTo: '/news', la URL debe ser /news
-    await expect(page).toHaveURL(/\/news/);
+    // Esperar a que la hidratación termine y la URL sea estable
+    await expect(page).toHaveURL(/\/news/, { timeout: 10000 });
+    await page.waitForLoadState('networkidle');
     
     // Verificar que hay navegación disponible
-    await expect(page.getByRole('link', { name: /news/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /market/i })).toBeVisible();
+    const marketLink = page.getByRole('link', { name: /market/i });
+    await expect(marketLink).toBeVisible();
     
     // PASO 2: Navegar a la sección de Market
-    await page.getByRole('link', { name: /market/i }).click();
-    await expect(page).toHaveURL(/\/market/);
+    // Forzamos la navegación y esperamos a que el cambio de URL se complete
+    await Promise.all([
+      marketLink.click(),
+      page.waitForURL(/\/market/, { timeout: 10000 })
+    ]);
+    
     await expect(page.getByRole('heading', { name: /market/i })).toBeVisible();
     
     // PASO 3: Buscar y seleccionar criptomoneda
+    // Esperar a que el input sea interactuable
     const searchInput = page.locator('input[placeholder*="bitcoin" i]');
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('solana');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
-      
-      // Verificar que aparece en la lista de activos
-      await expect(page.getByText(/solana/i).first()).toBeVisible();
-    }
+    await expect(searchInput).toBeVisible();
+    await searchInput.click();
+    await searchInput.fill('solana');
+    await searchInput.press('Enter');
+    
+    // Verificar que aparece en la lista de activos (damos tiempo a la API local)
+    await expect(page.getByText(/solana/i).first()).toBeVisible({ timeout: 10000 });
     
     // PASO 4: Verificar aparición del gráfico
     // El componente usa @defer, esperamos a que cargue
@@ -34,17 +39,19 @@ test.describe('Happy Path - Flujo completo de usuario', () => {
     await expect(chartContainer).toBeVisible({ timeout: 15000 });
     
     // PASO 5: Volver a News
-    await page.getByRole('link', { name: /news/i }).click();
-    await expect(page).toHaveURL(/\/news/);
+    const newsLink = page.getByRole('link', { name: /news/i });
+    await Promise.all([
+      newsLink.click(),
+      page.waitForURL(/\/news/, { timeout: 10000 })
+    ]);
     
     // PASO 6: Verificar visualización de noticias
     await page.waitForLoadState('networkidle');
+    
+    // Verificamos que al menos el shell de noticias o el estado inicial sea visible
     const newsGrid = page.locator('.news-grid');
     const stateCard = page.locator('.state-card');
-    
-    // Al menos uno debe ser visible (noticias cargadas o mensaje de búsqueda)
-    const isVisible = await newsGrid.isVisible() || await stateCard.isVisible();
-    expect(isVisible).toBeTruthy();
+    await expect(newsGrid.or(stateCard).first()).toBeVisible();
   });
 });
 

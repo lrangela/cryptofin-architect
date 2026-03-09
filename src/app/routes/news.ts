@@ -330,17 +330,17 @@ export default class NewsPage {
     effect(() => {
       const nextParams = this.newsState.queryParams();
       const current = this.route.snapshot.queryParamMap;
-      const currentKey = JSON.stringify({
-        q: current.get('q'),
-        language: current.get('language') ?? 'en',
-        from: current.get('from'),
-        to: current.get('to'),
-        pageSize: Number(current.get('pageSize') ?? 20),
-        page: Number(current.get('page') ?? 1),
-      });
-      const nextKey = JSON.stringify(nextParams);
+      
+      // Comparación estricta para evitar navegación redundante
+      const hasChanged = 
+        (nextParams.q ?? '') !== (current.get('q') ?? '') ||
+        nextParams.language !== (current.get('language') ?? 'en') ||
+        (nextParams.from ?? '') !== (current.get('from') ?? '') ||
+        (nextParams.to ?? '') !== (current.get('to') ?? '') ||
+        nextParams.pageSize !== Number(current.get('pageSize') ?? 20) ||
+        nextParams.page !== Number(current.get('page') ?? 1);
 
-      if (currentKey === nextKey) {
+      if (!hasChanged) {
         return;
       }
 

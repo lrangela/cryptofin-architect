@@ -1,12 +1,6 @@
-import { Component } from '@angular/core';
+import type { RouteMeta } from '@analogjs/router';
 
-import { AnalogWelcome } from './analog-welcome';
-
-@Component({
-  selector: 'app-home',
-  imports: [AnalogWelcome],
-  template: `
-     <app-analog-welcome/>
-  `,
-})
-export default class Home {}
+export const routeMeta: RouteMeta = {
+  redirectTo: '/news',
+  pathMatch: 'full',
+};

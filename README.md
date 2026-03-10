@@ -1,9 +1,11 @@
 # CryptoFin Architect
 
-[![CI](https://github.com/lrangela/cryptofin-architect/actions/workflows/ci.yml/badge.badge.svg)](https://github.com/lrangela/cryptofin-architect/actions)
+[![CI](https://github.com/lrangela/cryptofin-architect/actions/workflows/ci.yml/badge.svg)](https://github.com/lrangela/cryptofin-architect/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Live Demo:** [https://cryptofin-architect.vercel.app](https://cryptofin-architect.vercel.app) (Proyectado)
+> **GitHub Pages:** [https://lrangela.github.io/cryptofin-architect/](https://lrangela.github.io/cryptofin-architect/)
+>
+> **Nota de hosting:** GitHub Pages solo publica el cliente estatico. El backend SSR/BFF de Analog/Nitro y las rutas locales `/api/v1/*` requieren un runtime Node para funcionar de forma completa fuera del build.
 
 Portfolio-ready crypto intelligence dashboard built with **AnalogJS**, **Angular 21 (Signals & rxResource)**, and **TailwindCSS v4**. The application exposes a small BFF (Backend-For-Frontend) on top of external providers, keeps API keys on the server, and renders `/news` and `/market` from local Nitro API routes.
 
@@ -15,7 +17,7 @@ Portfolio-ready crypto intelligence dashboard built with **AnalogJS**, **Angular
 - **Server API:** `/api/v1/news`, `/api/v1/crypto`, `/api/v1/crypto/history`
 - **Data providers:** NewsAPI and CoinGecko
 - **Testing:** Vitest (Backend/Services) & Playwright (E2E & UI Edge Cases)
-- **Delivery:** Docker + GitHub Actions CI
+- **Delivery:** Docker + GitHub Actions CI/CD + GitHub Pages para el cliente estatico
 
 ## Architecture
 
@@ -117,8 +119,17 @@ docker build -t cryptofin-architect .
 docker run --env-file .env -p 8781:8781 cryptofin-architect
 ```
 
-**CI Pipeline (GitHub Actions):**
+**CI/CD Pipeline (GitHub Actions):**
 - Validates Node Modules caching.
 - Enforces Playwright dependencies.
 - Executes Vitest & Playwright matrix tests against `.env` Secrets.
-- Builds final SSR Artifact.
+- Builds final SSR artifact for verification.
+- Deploys `dist/client` to GitHub Pages on pushes to `main`/`master`.
+- Uses repository subpath base `/cryptofin-architect/` during Pages builds.
+
+## Deployment Notes
+
+- **GitHub Pages URL:** `https://lrangela.github.io/cryptofin-architect/`
+- **Pages artifact:** `dist/client`
+- **Full SSR/BFF deployment:** requires a platform capable of running the Analog/Nitro server output from `dist/analog/server` or `dist/ssr`
+- **Important:** the UI currently consumes local endpoints such as `/api/v1/news` and `/api/v1/crypto`; those endpoints are not executed by GitHub Pages

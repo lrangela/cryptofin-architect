@@ -1,41 +1,23 @@
 import { test, expect } from '@playwright/test';
 
-/**
- * Happy Path - Tests básicos de UI
- * Verifican elementos de UI presentes en cada página
- */
-
 test.describe('Happy Path - News', () => {
-  test('debe cargar News y mostrar elementos básicos', async ({ page }) => {
-    await page.goto('/news');
-    await page.waitForLoadState('domcontentloaded');
+  test('debe cargar News y mostrar elementos basicos', async ({ page }) => {
+    await page.goto('/news', { waitUntil: 'domcontentloaded' });
 
-    // Verificar heading principal
     await expect(page.getByRole('heading', { name: 'News', level: 1 })).toBeVisible();
-
-    // Verificar buscador
     await expect(page.locator('input[type="search"]')).toBeVisible();
-
-    // Verificar navegación
     await expect(page.getByRole('link', { name: 'News' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Market' })).toBeVisible();
   });
 });
 
 test.describe('Happy Path - Market', () => {
-  test('debe cargar Market y mostrar elementos básicos', async ({ page }) => {
-    await page.goto('/market');
-    await page.waitForLoadState('domcontentloaded');
-    // Esperar para rate limiting de API en CI
-    await page.waitForTimeout(10000);
+  test('debe cargar Market y mostrar elementos basicos', async ({ page }) => {
+    await page.goto('/market', { waitUntil: 'domcontentloaded' });
 
-    // Verificar heading principal
     await expect(page.getByRole('heading', { name: 'Market', level: 1 })).toBeVisible();
-
-    // Verificar buscador
     await expect(page.locator('input[placeholder*="bitcoin" i]')).toBeVisible();
-
-    // Verificar navegación
+    await expect(page.locator('.market-card').first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'News' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Market' })).toBeVisible();
   });

@@ -9,6 +9,10 @@ import {
   CryptoProviderError,
   getCoinGeckoHistory,
 } from '../../../../services/crypto/coingecko.provider';
+import {
+  getMockHistory,
+  isE2EMockApiEnabled,
+} from '../../../../services/e2e-api-fixtures';
 import { jsonError } from '../response';
 import {
   logApiError,
@@ -73,6 +77,12 @@ export async function cryptoHistoryHandler(
   logProviderStart('CoinGecko', '/coins/{id}/market_chart', { id, days });
 
   try {
+    if (isE2EMockApiEnabled()) {
+      const result = getMockHistory(id, days);
+      timing.end(startTime, 'CoinGecko', '/coins/{id}/market_chart', true, undefined, result.points?.length ?? 0);
+      return result;
+    }
+
     const result = await getCoinGeckoHistory(id, days);
     
     // Log de éxito

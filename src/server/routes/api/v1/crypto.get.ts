@@ -9,6 +9,10 @@ import {
   CryptoProviderError,
   getCoinGeckoQuotes,
 } from '../../../services/crypto/coingecko.provider';
+import {
+  getMockQuotes,
+  isE2EMockApiEnabled,
+} from '../../../services/e2e-api-fixtures';
 import { jsonError } from './response';
 import {
   logApiError,
@@ -53,6 +57,12 @@ export async function cryptoHandler(
   logProviderStart('CoinGecko', '/simple/price', { ids: ids.join(',') });
 
   try {
+    if (isE2EMockApiEnabled()) {
+      const result = getMockQuotes(ids);
+      timing.end(startTime, 'CoinGecko', '/simple/price', true, undefined, result.length);
+      return result;
+    }
+
     const result = await getCoinGeckoQuotes(ids);
     
     // Log de éxito

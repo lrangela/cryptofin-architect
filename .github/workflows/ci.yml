@@ -4,6 +4,14 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # 1. Job para validar el estilo y calidad (Rápido)
@@ -94,3 +102,45 @@ jobs:
           name: dist
           path: dist/
           retention-days: 7
+
+  deploy-pages:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.1
+          cache: npm
+      - run: npm ci
+      - name: Build static client for GitHub Pages
+        run: npm run build
+        env:
+          DEPLOY_TARGET: github-pages
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          NEWSAPI_BASE_URL: ${{ secrets.NEWSAPI_BASE_URL }}
+          COINGECKO_BASE: ${{ secrets.COINGECKO_BASE }}
+          COINGECKO_VS_CURRENCY: ${{ secrets.COINGECKO_VS_CURRENCY }}
+          RAPID_NEWS_HOST: ${{ secrets.RAPID_NEWS_HOST }}
+          RAPID_NEWS_KEY: ${{ secrets.RAPID_NEWS_KEY }}
+      - name: Prepare SPA fallback
+        run: |
+          cp dist/client/index.html dist/client/404.html
+          touch dist/client/.nojekyll
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/client
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -7,7 +7,10 @@ import type {
   NewsSearchParams,
 } from '../../../../app/shared/models/news.model';
 import { getNews } from '../../../services/news/news.service';
-import { NewsProviderError } from '../../../services/news/providers/newsapi.provider';
+import {
+  getMockNews,
+  isE2EMockApiEnabled,
+} from '../../../services/e2e-api-fixtures';
 import { jsonError } from './response';
 import {
   logApiError,
@@ -85,6 +88,12 @@ export async function newsHandler(
   logProviderStart('NewsAPI', '/top-headlines', { q, language });
 
   try {
+    if (isE2EMockApiEnabled()) {
+      const result = getMockNews(params);
+      timing.end(startTime, 'NewsAPI', '/top-headlines', true, undefined, result.length);
+      return result;
+    }
+
     const result = await getNews(params);
     
     // Log de éxito

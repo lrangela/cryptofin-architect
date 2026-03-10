@@ -1,6 +1,10 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map, throwError } from 'rxjs';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
+import {
+  getGitHubPagesNews,
+  isGitHubPagesBuild,
+} from '../../shared/github-pages-data';
 import type {
   NewsArticle,
   NewsErrorResponse,
@@ -13,6 +17,10 @@ export class NewsApiService {
   private readonly http = inject(HttpClient);
 
   searchNews(params: NewsSearchParams): Observable<NewsArticle[]> {
+    if (isGitHubPagesBuild) {
+      return of(getGitHubPagesNews(params));
+    }
+
     let httpParams = new HttpParams()
       .set('q', params.q)
       .set('language', params.language)

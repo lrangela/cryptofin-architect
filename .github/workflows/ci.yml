@@ -125,6 +125,7 @@ jobs:
         run: npm run build
         env:
           DEPLOY_TARGET: github-pages
+          VITE_DEPLOY_TARGET: github-pages
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           NEWSAPI_BASE_URL: ${{ secrets.NEWSAPI_BASE_URL }}
           COINGECKO_BASE: ${{ secrets.COINGECKO_BASE }}

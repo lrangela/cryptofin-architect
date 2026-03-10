@@ -1,6 +1,11 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, forkJoin, map, throwError } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of, throwError } from 'rxjs';
+import {
+  getGitHubPagesHistory,
+  getGitHubPagesQuotes,
+  isGitHubPagesBuild,
+} from '../../shared/github-pages-data';
 import type {
   CryptoErrorResponse,
   CryptoHistorySeries,
@@ -13,6 +18,10 @@ export class MarketApiService {
   private readonly http = inject(HttpClient);
 
   getQuotes(ids: string[]): Observable<CryptoQuote[]> {
+    if (isGitHubPagesBuild) {
+      return of(getGitHubPagesQuotes(ids));
+    }
+
     const params = new HttpParams().set('ids', ids.join(','));
 
     return this.http
@@ -32,6 +41,10 @@ export class MarketApiService {
   }
 
   getHistory(id: string, days: number): Observable<CryptoHistorySeries> {
+    if (isGitHubPagesBuild) {
+      return of(getGitHubPagesHistory(id, days));
+    }
+
     const params = new HttpParams().set('id', id).set('days', String(days));
 
     return this.http

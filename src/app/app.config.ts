@@ -7,14 +7,19 @@ import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideClientHydration } from '@angular/platform-browser';
+import { withComponentInputBinding, withHashLocation } from '@angular/router';
 import { provideFileRouter, requestContextInterceptor } from '@analogjs/router';
+import { isGitHubPagesBuild } from './shared/github-pages-data';
+
+const routerFeatures = isGitHubPagesBuild
+  ? [withComponentInputBinding(), withHashLocation()]
+  : [withComponentInputBinding()];
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideFileRouter(withComponentInputBinding()),
+    provideFileRouter(...routerFeatures),
     provideHttpClient(
       withFetch(),
       withInterceptors([requestContextInterceptor])

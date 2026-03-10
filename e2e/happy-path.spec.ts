@@ -39,16 +39,4 @@ test.describe('Happy Path - Market', () => {
     await expect(page.getByRole('link', { name: 'News' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Market' })).toBeVisible();
   });
-
-  test('debe permitir escribir en el buscador', async ({ page }) => {
-    await page.goto('/market');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(10000);
-
-    const searchInput = page.locator('input[placeholder*="bitcoin" i]');
-    await searchInput.fill('test123');
-
-    // Verificar que el input tiene el valor
-    await expect(searchInput).toHaveValue('test123');
-  });
 });

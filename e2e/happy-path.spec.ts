@@ -33,8 +33,8 @@ test.describe('Happy Path - Market', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/market');
     await page.waitForLoadState('domcontentloaded');
-    // Esperar a que carguen los datos
-    await page.waitForTimeout(2000);
+    // Esperar más tiempo para recuperar de rate limiting de API en CI
+    await page.waitForTimeout(5000);
   });
 
   test('debe mostrar el buscador de coins', async ({ page }) => {
@@ -44,8 +44,13 @@ test.describe('Happy Path - Market', () => {
 
   test('debe permitir buscar una coin', async ({ page }) => {
     const searchInput = page.locator('input[placeholder*="bitcoin" i]');
+    await searchInput.click(); // Click primero para asegurar focus
+    await page.waitForTimeout(500);
     await searchInput.fill('ethereum');
-    await expect(searchInput).toHaveValue('ethereum');
+    await page.waitForTimeout(500);
+    // Verificar que el input tiene el valor (puede fallar por rate limiting)
+    const value = await searchInput.inputValue();
+    expect(value).toBe('ethereum');
   });
 
   test('debe mostrar la navegación entre páginas', async ({ page }) => {
@@ -59,14 +64,18 @@ test.describe('Navegación entre páginas', () => {
     // Ir a Market
     await page.goto('/market');
     await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000); // Esperar rate limiting
     await expect(page).toHaveURL(/\/market/, { timeout: 15000 });
 
     // Navegar a News
     await page.getByRole('link', { name: /news/i }).click();
+    await page.waitForLoadState('domcontentloaded');
     await expect(page).toHaveURL(/\/news/, { timeout: 15000 });
 
     // Navegar de vuelta a Market
     await page.getByRole('link', { name: /market/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000); // Esperar rate limiting
     await expect(page).toHaveURL(/\/market/, { timeout: 15000 });
   });
 });

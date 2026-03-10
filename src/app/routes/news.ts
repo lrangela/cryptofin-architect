@@ -138,7 +138,7 @@ export const routeMeta: RouteMeta = {
           <p>No se encontraron noticias para "{{ debouncedQuery() }}".</p>
         </section>
       } @else {
-        @defer (on viewport; prefetch on idle) {
+        @defer (on timer(0ms); prefetch on idle) {
           <section class="news-grid" aria-label="Resultados de noticias">
             @for (article of paginatedArticles(); track article.url) {
               <article class="news-card">
@@ -224,18 +224,18 @@ export default class NewsPage {
     'web3',
   ];
 
-  readonly query = this.newsState.query;
+  readonly query = signal('');
   readonly language = this.newsState.language;
   readonly from = this.newsState.from;
   readonly to = this.newsState.to;
   readonly pageSize = this.newsState.pageSize;
   readonly page = this.newsState.page;
-  readonly debouncedQuery = signal('');
+
+  readonly debouncedQuery = computed(() => this.routeQuery().get('q')?.trim() ?? '');
   readonly itemsPerPage = 10;
-  private readonly lastDebouncedQuery = signal<string | null>(null);
 
   private readonly params = computed<NewsSearchParams | null>(() => {
-    const q = this.debouncedQuery().trim();
+    const q = this.debouncedQuery();
 
     if (!q) {
       return null;
@@ -306,49 +306,45 @@ export default class NewsPage {
         pageSize: params.get('pageSize'),
         page: params.get('page'),
       });
+      // Sincronizar input query con el de la ruta al navegar (atrás/adelante)
+      this.query.set(params.get('q') ?? '');
     });
 
     effect((onCleanup) => {
-      const nextValue = this.query();
+      const query = this.query();
+      const language = this.language();
+      const from = this.from();
+      const to = this.to();
+      const pageSize = this.pageSize();
+      const page = this.page();
+
       const timeoutId = setTimeout(() => {
-        this.debouncedQuery.set(nextValue);
+        const current = this.route.snapshot.queryParamMap;
+        const hasChanged = 
+          (query.trim() || null) !== (current.get('q') || null) ||
+          (language.trim() || 'en') !== (current.get('language') || 'en') ||
+          (from.trim() || null) !== (current.get('from') || null) ||
+          (to.trim() || null) !== (current.get('to') || null) ||
+          pageSize !== Number(current.get('pageSize') || 20) ||
+          page !== Number(current.get('page') || 1);
+
+        if (hasChanged) {
+          void this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: {
+              q: query.trim() || null,
+              language: language.trim() || 'en',
+              from: from.trim() || null,
+              to: to.trim() || null,
+              pageSize,
+              page,
+            },
+            replaceUrl: true,
+          });
+        }
       }, 350);
+
       onCleanup(() => clearTimeout(timeoutId));
-    });
-
-    effect(() => {
-      const nextQuery = this.debouncedQuery();
-      const previousQuery = this.lastDebouncedQuery();
-
-      if (previousQuery !== null && previousQuery !== nextQuery) {
-        this.page.set(1);
-      }
-
-      this.lastDebouncedQuery.set(nextQuery);
-    });
-
-    effect(() => {
-      const nextParams = this.newsState.queryParams();
-      const current = this.route.snapshot.queryParamMap;
-      
-      // Comparación estricta para evitar navegación redundante
-      const hasChanged = 
-        (nextParams.q ?? '') !== (current.get('q') ?? '') ||
-        nextParams.language !== (current.get('language') ?? 'en') ||
-        (nextParams.from ?? '') !== (current.get('from') ?? '') ||
-        (nextParams.to ?? '') !== (current.get('to') ?? '') ||
-        nextParams.pageSize !== Number(current.get('pageSize') ?? 20) ||
-        nextParams.page !== Number(current.get('page') ?? 1);
-
-      if (!hasChanged) {
-        return;
-      }
-
-      void this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: nextParams,
-        replaceUrl: true,
-      });
     });
   }
 

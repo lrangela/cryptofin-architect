@@ -76,11 +76,15 @@ export default defineConfig({
   ],
   /* Servidor de desarrollo para tests */
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run dev -- --strictPort',
     url: BASE_URL,
     reuseExistingServer: !process.env['CI'],
     timeout: 120000,
     stdout: 'pipe',
     stderr: 'pipe',
+    /* Variables de entorno para el servidor */
+    env: {
+      DISABLE_CACHE: 'true',
+    },
   },
 });

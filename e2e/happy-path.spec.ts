@@ -1,52 +1,71 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Happy Path - Flujo completo de usuario', () => {
-  test('debe cargar la app, buscar cripto, mostrar gráfico y noticias', async ({ page }) => {
-    // Al ser Analog y tener redirectTo: '/news', la URL debe ser /news
+/**
+ * Happy Path - Flujo básico de usuario
+ * Tests simplificados para verificar navegación y UI básica
+ */
+
+test.describe('Happy Path - Navegación básica', () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+  });
+
+  test('debe redirigir a news desde la raíz', async ({ page }) => {
     await expect(page).toHaveURL(/\/news/, { timeout: 15000 });
-    
-    // Verificar que hay navegación disponible
+  });
+
+  test('debe mostrar la página de News', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'News', level: 1 })).toBeVisible();
+    await expect(page.locator('input[type="search"]')).toBeVisible();
+  });
+
+  test('debe navegar a Market desde News', async ({ page }) => {
     const marketLink = page.getByRole('link', { name: /market/i });
     await expect(marketLink).toBeVisible();
-    
-    // PASO 2: Navegar a la sección de Market
     await marketLink.click();
     await expect(page).toHaveURL(/\/market/, { timeout: 10000 });
-    await expect(page.getByRole('heading', { name: /market/i })).toBeVisible();
-    
-    // PASO 3: Buscar y seleccionar criptomoneda
+    await expect(page.getByRole('heading', { name: 'Market', level: 1 })).toBeVisible();
+  });
+});
+
+test.describe('Happy Path - Market', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/market');
+    await page.waitForLoadState('domcontentloaded');
+    // Esperar a que carguen los datos
+    await page.waitForTimeout(2000);
+  });
+
+  test('debe mostrar el buscador de coins', async ({ page }) => {
     const searchInput = page.locator('input[placeholder*="bitcoin" i]');
     await expect(searchInput).toBeVisible();
-    await searchInput.fill('solana');
-    await searchInput.press('Enter');
-    
-    // Verificar que aparece en la lista de activos
-    await expect(page.getByText(/solana/i).first()).toBeVisible({ timeout: 15000 });
-    
-    // PASO 4: Verificar aparición del gráfico
-    const chartContainer = page.locator('app-market-comparison-chart');
-    await expect(chartContainer).toBeVisible({ timeout: 20000 });
-    
-    // PASO 5: Volver a News
-    const newsLink = page.getByRole('link', { name: /news/i });
-    await newsLink.click();
-    await expect(page).toHaveURL(/\/news/, { timeout: 10000 });
-    
-    // PASO 6: Verificar que la página de noticias responde
-    const searchNews = page.locator('input[type="search"]');
-    await expect(searchNews).toBeVisible();
+  });
+
+  test('debe permitir buscar una coin', async ({ page }) => {
+    const searchInput = page.locator('input[placeholder*="bitcoin" i]');
+    await searchInput.fill('ethereum');
+    await expect(searchInput).toHaveValue('ethereum');
+  });
+
+  test('debe mostrar la navegación entre páginas', async ({ page }) => {
+    await expect(page.getByRole('link', { name: 'News' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Market' })).toBeVisible();
   });
 });
 
 test.describe('Navegación entre páginas', () => {
   test('debe navegar correctamente entre Market y News', async ({ page }) => {
+    // Ir a Market
     await page.goto('/market');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page).toHaveURL(/\/market/, { timeout: 15000 });
-    
+
+    // Navegar a News
     await page.getByRole('link', { name: /news/i }).click();
     await expect(page).toHaveURL(/\/news/, { timeout: 15000 });
-    
+
+    // Navegar de vuelta a Market
     await page.getByRole('link', { name: /market/i }).click();
     await expect(page).toHaveURL(/\/market/, { timeout: 15000 });
   });

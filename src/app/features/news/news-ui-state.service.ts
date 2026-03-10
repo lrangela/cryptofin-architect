@@ -26,17 +26,36 @@ export class NewsUiStateService {
     pageSize?: string | null;
     page?: string | null;
   }): void {
-    this.query.set(params.q?.trim() ?? '');
-    this.language.set(params.language?.trim() || 'en');
-    this.from.set(params.from?.trim() ?? '');
-    this.to.set(params.to?.trim() ?? '');
+    const nextQuery = params.q?.trim() ?? '';
+    if (this.query() !== nextQuery) {
+      this.query.set(nextQuery);
+    }
+
+    const nextLanguage = params.language?.trim() || 'en';
+    if (this.language() !== nextLanguage) {
+      this.language.set(nextLanguage);
+    }
+
+    const nextFrom = params.from?.trim() ?? '';
+    if (this.from() !== nextFrom) {
+      this.from.set(nextFrom);
+    }
+
+    const nextTo = params.to?.trim() ?? '';
+    if (this.to() !== nextTo) {
+      this.to.set(nextTo);
+    }
 
     const nextPageSize = Number(params.pageSize);
-    this.pageSize.set(
-      nextPageSize === 10 || nextPageSize === 50 ? nextPageSize : 20,
-    );
+    const validPageSize = nextPageSize === 10 || nextPageSize === 50 ? nextPageSize : 20;
+    if (this.pageSize() !== validPageSize) {
+      this.pageSize.set(validPageSize);
+    }
 
     const nextPage = Number(params.page);
-    this.page.set(Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1);
+    const validPage = Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1;
+    if (this.page() !== validPage) {
+      this.page.set(validPage);
+    }
   }
 }

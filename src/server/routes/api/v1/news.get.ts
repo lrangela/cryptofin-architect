@@ -112,16 +112,18 @@ export async function newsHandler(
   }
 }
 
-export default defineCachedEventHandler(newsHandler, {
-  maxAge: 60,
-  name: 'news-cache',
-  getKey: (event: H3Event) => {
-    const query = getQuery(event);
-    const q = toTrimmedString(query['q']) || 'top-headlines';
-    const language = toTrimmedString(query['language']) ?? DEFAULT_LANGUAGE;
-    const from = toTrimmedString(query['from']) || '';
-    const to = toTrimmedString(query['to']) || '';
-    const pageSize = parsePageSize(query['pageSize']);
-    return `${q}-${language}-${from}-${to}-${pageSize}`;
-  },
-});
+export default process.env['DISABLE_CACHE'] === 'true'
+  ? newsHandler
+  : defineCachedEventHandler(newsHandler, {
+      maxAge: 60,
+      name: 'news-cache',
+      getKey: (event: H3Event) => {
+        const query = getQuery(event);
+        const q = toTrimmedString(query['q']) || 'top-headlines';
+        const language = toTrimmedString(query['language']) ?? DEFAULT_LANGUAGE;
+        const from = toTrimmedString(query['from']) || '';
+        const to = toTrimmedString(query['to']) || '';
+        const pageSize = parsePageSize(query['pageSize']);
+        return `${q}-${language}-${from}-${to}-${pageSize}`;
+      },
+    });

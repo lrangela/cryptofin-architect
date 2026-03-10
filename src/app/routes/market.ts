@@ -1,9 +1,9 @@
 import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, DeferredBlockListener } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import type { RouteMeta } from '@analogjs/router';
-import type { MarketComparisonChartComponent } from '../features/market/components/market-comparison-chart.component';
+import { MarketComparisonChartComponent } from '../features/market/components/market-comparison-chart.component';
 import { MarketApiService } from '../features/market/market-api.service';
 import {
   MARKET_COIN_CATALOG,
@@ -27,6 +27,7 @@ export const routeMeta: RouteMeta = {
     CurrencyPipe,
     DecimalPipe,
     DatePipe,
+    MarketComparisonChartComponent,
   ],
   host: {
     class: 'page-shell',
@@ -138,7 +139,7 @@ export const routeMeta: RouteMeta = {
           <p>No hubo datos para los activos solicitados.</p>
         </section>
       } @else {
-        @defer (on viewport) {
+        @defer (on timer(0ms)) {
           <app-market-comparison-chart
             [allSeries]="allSeries()"
             [visibleIds]="visibleCoins()"
@@ -205,10 +206,18 @@ export default class MarketPage {
     { initialValue: this.route.snapshot.queryParamMap },
   );
 
-  readonly selectedCoins = signal(['bitcoin', 'ethereum']);
-  readonly visibleCoins = signal(['bitcoin', 'ethereum']);
   readonly coinQuery = signal('');
   readonly chartDays = signal<1 | 7 | 30>(7);
+
+  readonly selectedCoins = computed(() => {
+    const routeParam = this.routeCoins().get('coins');
+    const routeCoins = parseMarketCoinsParam(routeParam).filter((coin) =>
+      (this.coinCatalog as readonly string[]).includes(coin),
+    );
+    return routeCoins.length ? routeCoins : ['bitcoin', 'ethereum'];
+  });
+
+  readonly visibleCoins = signal(['bitcoin', 'ethereum']);
 
   private readonly request = computed(() => ({
     ids: this.selectedCoins(),
@@ -282,37 +291,11 @@ export default class MarketPage {
 
   constructor() {
     effect(() => {
-      const routeParam = this.routeCoins().get('coins');
-      const routeCoins = parseMarketCoinsParam(routeParam).filter((coin) =>
-        (this.coinCatalog as readonly string[]).includes(coin),
-      );
-
-      if (!routeCoins.length) {
-        return;
-      }
-
-      const currentKey = this.selectedCoins().join(',');
-      const nextKey = routeCoins.join(',');
-      if (currentKey === nextKey) {
-        return;
-      }
-
-      this.selectedCoins.set(routeCoins);
-      this.visibleCoins.set(routeCoins);
-    });
-
-    effect(() => {
-      const coins = this.selectedCoins().join(',');
-      const current = this.route.snapshot.queryParamMap.get('coins') ?? '';
-      if (coins === current) {
-        return;
-      }
-
-      void this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: { coins },
-        queryParamsHandling: 'merge',
-        replaceUrl: true,
+      const coins = this.selectedCoins();
+      this.visibleCoins.update(current => {
+        const next = current.filter(c => coins.includes(c));
+        const missing = coins.filter(c => !current.includes(c));
+        return [...next, ...missing];
       });
     });
   }
@@ -339,28 +322,35 @@ export default class MarketPage {
     this.toggleCoinVisibility(coin);
   }
 
+  private updateRoute(coins: string[]): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { coins: coins.join(',') },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   protected addCoin(coin: string): void {
     const normalizedCoin = normalizeCoinId(coin);
     if (!normalizedCoin) {
       return;
     }
 
-    this.selectedCoins.update((coins) =>
-      coins.includes(normalizedCoin) ? coins : [...coins, normalizedCoin],
-    );
-    this.visibleCoins.update((coins) =>
-      coins.includes(normalizedCoin) ? coins : [...coins, normalizedCoin],
-    );
+    const current = this.selectedCoins();
+    if (!current.includes(normalizedCoin)) {
+      this.updateRoute([...current, normalizedCoin]);
+    }
     this.coinQuery.set('');
   }
 
   protected removeCoin(coin: string): void {
-    if (this.selectedCoins().length <= 1) {
+    const current = this.selectedCoins();
+    if (current.length <= 1) {
       return;
     }
 
-    this.selectedCoins.update((coins) => coins.filter((item) => item !== coin));
-    this.visibleCoins.update((coins) => coins.filter((item) => item !== coin));
+    this.updateRoute(current.filter((item) => item !== coin));
   }
 
   protected toggleCoinVisibility(coin: string): void {

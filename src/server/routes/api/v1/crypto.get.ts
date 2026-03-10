@@ -79,8 +79,10 @@ export async function cryptoHandler(
   }
 }
 
-export default defineCachedEventHandler(cryptoHandler, {
-  maxAge: 30,
-  name: 'crypto-cache',
-  getKey: (event: H3Event) => parseIds(getQuery(event)['ids']).join(','),
-});
+export default process.env['DISABLE_CACHE'] === 'true'
+  ? cryptoHandler
+  : defineCachedEventHandler(cryptoHandler, {
+      maxAge: 30,
+      name: 'crypto-cache',
+      getKey: (event: H3Event) => parseIds(getQuery(event)['ids']).join(','),
+    });

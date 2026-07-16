@@ -52,6 +52,7 @@ Thumbs.db
 # Playwright & Testing Artifacts
 /e2e/playwright-report/
 /e2e/test-results/
+/e2e/screenshots/
 /.playwright-mcp/
 /screenshot_*.png
 *.log

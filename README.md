@@ -6,6 +6,8 @@
 [![Backend](https://img.shields.io/badge/BFF-Nitro-blue?style=for-the-badge)](#stack-tecnico)
 [![SSR](https://img.shields.io/badge/Rendering-SSR%20%7C%20Hydration-brightgreen?style=for-the-badge)](#performance)
 
+🔗 **Demo en Vivo / Live Preview:** [https://lrangela.github.io/cryptofin-architect/](https://lrangela.github.io/cryptofin-architect/)
+
 **CryptoFin Architect** es una aplicación de inteligencia y analítica financiera orientada a criptomonedas de alto rendimiento. Desarrollada con **Angular 21** (usando reactividad zoneless nativa) y el meta-framework **AnalogJS** impulsado por **Vite**, la plataforma emplea un patrón de diseño **BFF (Backend-for-Frontend)** montado sobre el motor **Nitro** para optimizar la ingesta de datos de APIs externas, mitigar riesgos de CORS e implementar almacenamiento en caché de baja latencia.
 
 ---

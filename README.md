@@ -1,135 +1,129 @@
-# CryptoFin Architect
+# CryptoFin Architect — High-Performance Financial Intelligence Platform
 
-[![CI](https://github.com/lrangela/cryptofin-architect/actions/workflows/ci.yml/badge.svg)](https://github.com/lrangela/cryptofin-architect/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Reactivity](https://img.shields.io/badge/Reactivity-Signals%20%26%20rxResource-red?style=for-the-badge)](#arquitectura)
+[![Framework](https://img.shields.io/badge/Framework-AnalogJS-orange?style=for-the-badge)](#stack-tecnico)
+[![Backend](https://img.shields.io/badge/BFF-Nitro-blue?style=for-the-badge)](#stack-tecnico)
+[![SSR](https://img.shields.io/badge/Rendering-SSR%20%7C%20Hydration-brightgreen?style=for-the-badge)](#performance)
 
-> **GitHub Pages:** [https://lrangela.github.io/cryptofin-architect/](https://lrangela.github.io/cryptofin-architect/)
->
-> **Nota de hosting:** GitHub Pages solo publica el cliente estatico. El backend SSR/BFF de Analog/Nitro y las rutas locales `/api/v1/*` requieren un runtime Node para funcionar de forma completa fuera del build.
+**CryptoFin Architect** es una aplicación de inteligencia y analítica financiera orientada a criptomonedas de alto rendimiento. Desarrollada con **Angular 21** (usando reactividad zoneless nativa) y el meta-framework **AnalogJS** impulsado por **Vite**, la plataforma emplea un patrón de diseño **BFF (Backend-for-Frontend)** montado sobre el motor **Nitro** para optimizar la ingesta de datos de APIs externas, mitigar riesgos de CORS e implementar almacenamiento en caché de baja latencia.
 
-Portfolio-ready crypto intelligence dashboard built with **AnalogJS**, **Angular 21 (Signals & rxResource)**, and **TailwindCSS v4**. The application exposes a small BFF (Backend-For-Frontend) on top of external providers, keeps API keys on the server, and renders `/news` and `/market` from local Nitro API routes.
+---
 
-## Overview
+## Arquitectura y Flujo de Datos
 
-- **Frontend:** Angular 21 (Zoneless-ready, Control Flow, `@defer` blocks) + AnalogJS file-based routing.
-- **SSR/BFF runtime:** AnalogJS on Nitro.
-- **State Management:** Custom Reactive State (`ResourceStateService`) using Signals and `rxResource`.
-- **Server API:** `/api/v1/news`, `/api/v1/crypto`, `/api/v1/crypto/history`
-- **Data providers:** NewsAPI and CoinGecko
-- **Testing:** Vitest (Backend/Services) & Playwright (E2E & UI Edge Cases)
-- **Delivery:** Docker + GitHub Actions CI/CD + GitHub Pages para el cliente estatico
+El diseño segrega de forma rígida la visualización del cliente y la manipulación de datos sensibles mediante una arquitectura BFF. El flujo de datos reactivo y seguro está organizado de la siguiente manera:
 
-## Architecture
+```mermaid
+graph TD
+    %% Client Context
+    subgraph Client ["Client Side (Angular 21 & Signals)"]
+        Router["Router / URL Query Params"] <-->|Bi-directional Sync| StateService["NewsUiStateService (Signals)"]
+        NewsPage["NewsPage (Smart Container)"] -->|computed params| NewsResource["newsResource (rxResource)"]
+        MarketPage["MarketPage (Smart Container)"] -->|computed params| MarketResource["marketResource / historyResource"]
+        
+        %% Presentation
+        NewsResource -->|Articles| NewsCard["NewsArticleCardComponent"]
+        MarketResource -->|Quotes & History| MarketChart["MarketComparisonChartComponent"]
+        MarketResource -->|Pending Quotes| SkeletonCard["MarketCoinCardComponent (Skeleton State)"]
+        MarketResource -->|Loaded Quotes| ActiveCard["MarketCoinCardComponent (Active State)"]
+        
+        %% User Interaction
+        SearchInput["CoinExplorerPanelComponent (Search Input)"] -->|resolveCoinId() / Tickers & Names| MarketPage
+    end
 
-The app uses a strict BFF pattern so the browser never calls third-party providers directly, guaranteeing security and high performance.
+    %% Network Boundary
+    Client -->|HTTP Requests / Local API| BFF["Nitro BFF (Server Router)"]
 
-```text
-+------------------+        +----------------------------------+
-| Browser / SSR UI | <----> | AnalogJS App (Angular + Nitro)  |
-+------------------+        +----------------------------------+
-                                     |             |
-                                     |             |
-                           +---------+             +------------------+
-                           |                                            |
-                           v                                            v
-                  /api/v1/news                               /api/v1/crypto*
-                           |                                            |
-                           v                                            v
-                       NewsAPI                                     CoinGecko API
+    %% Server Context
+    subgraph BFF_Nitro ["Server Side (Nitro BFF Proxy)"]
+        BFF -->|GET /api/v1/news| NewsHandler["news.get.ts (defineCachedEventHandler)"]
+        BFF -->|GET /api/v1/crypto| CryptoHandler["crypto.get.ts"]
+        BFF -->|GET /api/v1/healthz| HealthHandler["healthz.get.ts"]
+        
+        %% Mocks and Providers
+        NewsHandler -->|E2E_MOCK_API = true| MockFixtures["e2e-api-fixtures.ts (Spanish Mocks)"]
+        NewsHandler -->|E2E_MOCK_API = false| NewsProvider["newsapi.provider.ts (X-Api-Key Header)"]
+        CryptoHandler -->|E2E_MOCK_API = true| MockFixtures
+        CryptoHandler -->|E2E_MOCK_API = false| CryptoProvider["coingecko.provider.ts"]
+    end
+
+    %% External APIs
+    NewsProvider -->|Secure HTTPS Header Key| NewsAPI["External NewsAPI"]
+    CryptoProvider -->|REST Query| CoinGecko["External CoinGecko API"]
 ```
 
-`/api/v1/crypto*` covers both quote and history endpoints.
+### Estructura y Patrones Arquitectónicos
+*   **BFF (Backend-For-Frontend)**: La capa de presentación del cliente nunca interactúa directamente con APIs externas. Toda llamada se canaliza a través de sub-rutas del servidor Nitro, aislando secretos del lado del servidor y previniendo problemas de CORS.
+*   **Presenters & Containers**: Separación estricta de responsabilidades (SOLID). Las páginas de ruta (`market.ts`, `news.ts`) actúan como controladores lógicos que manejan queries, inyectan servicios y gestionan recursos, mientras que la renderización visual se delega en componentes puros como `NewsArticleCardComponent`, `MarketCoinCardComponent` y `CoinExplorerPanelComponent`.
+*   **Reactividad Basada en Recursos**: Consumo de flujos de datos asíncronos mediante `rxResource` y `computed`, permitiendo derivar el estado de la UI directamente de los cambios en los signals de búsqueda de forma limpia y declarativa (RxJS Debounce).
 
-## Project Structure
+---
 
-```text
-src/
-  app/
-    features/        # Domain-driven feature components
-    pages/           # File-based Analog routing exports
-    routes/          # Route logic & UI representation
-    shared/          # Shared models, utils & State Services
-  server/
-    routes/api/v1/   # Nitro endpoints
-    services/        # Internal server logic & Provider integrations
-    tests/           # Backend Vitest specifications
-e2e/                 # Playwright UI & Integration flows
-```
+## Decisiones Técnicas Clave (ADR)
 
-## Technical Decisions
+### [ADR-001] Aislamiento de Entornos en Pruebas (Vitest Workspaces)
+*   **Contexto:** Compilar componentes con `@analogjs/platform` dentro de pruebas de componentes unitarios generaba colisiones en la resolución de alias de Nitro y dependencias del enrutador SSR.
+*   **Decisión:** Separar las suites usando proyectos en `vitest.config.ts`.
+    *   **Proyecto `client`:** Corre en `jsdom` y carga `src/test-setup.ts` para pruebas de TestBed. Compila componentes usando transpilación limpia de esbuild (JIT), evitando plugins intrusivos.
+    *   **Proyecto `server`:** Corre en `node` puro, permitiendo simular e interceptar módulos asíncronos (`vi.mock('#imports')`) sin pasar por la optimización de código de Vite.
 
-### ADR-001: BFF over direct client calls
-- API keys stay on the server.
-- Upstream payloads are normalized before reaching the UI.
-- Provider failures are translated into stable local error contracts.
+### [ADR-002] Seguridad de Secretos en Cabeceras (OWASP Compliance)
+*   **Contexto:** Las llaves de API enviadas como query parameters (`/everything?apiKey=...`) son propensas a quedar registradas en logs de proxies, historiales y cabeceras de referers.
+*   **Decisión:** Reconfigurar el flujo hacia NewsAPI en `newsapi.provider.ts` para inyectar la credencial de forma segura a través de la cabecera HTTP `X-Api-Key`, enmascarando fallos del lado del servidor bajo códigos HTTP 503 sin divulgar variables de entorno privadas.
 
-### ADR-002: Single caching layer
-- Caching is handled only at Nitro route level through `defineCachedEventHandler`.
-- Route TTLs are explicit and per-endpoint.
+### [ADR-003] Sincronización y Debounce Reactivo
+*   **Contexto:** Los efectos de sincronización que dependen de temporizadores imperativos (`setTimeout`) causaban desfases lógicos y bucles de renderizado.
+*   **Decisión:** Implementar flujos reactivos basados en `toObservable` y operadores clásicos de RxJS (`debounceTime(350)`, `distinctUntilChanged()`) acotados bajo el ciclo de vida del componente mediante `takeUntilDestroyed(DestroyRef)`.
 
-### ADR-003: Modern Reactive UI with Angular 21
-- **Signals First:** State is managed entirely via Signals (`computed`, `effect`) ensuring optimized rendering.
-- **rxResource:** Used to bridge standard HTTP Observables into the synchronous UI reactivity loop.
-- **@defer Blocks:** Heavy UI elements (like `ApexCharts`) and grids are loaded lazily utilizing `@defer (on viewport)`, improving Initial Load Time and FCP.
-- **Resource State Service:** An abstraction (`createResourceState`) manages explicit UI states (`idle`, `loading`, `success`, `error`) preventing unexpected layout shifts.
+### [ADR-004] Persistencia Global del Estado (WatchlistService con LocalStorage)
+*   **Contexto:** Al navegar entre páginas o recargar, la selección de monedas del usuario y el idioma elegido se perdían, forzando una reconfiguración manual constante y generando una experiencia de usuario fragmentada.
+*   **Decisión:** Crear un servicio centralizado `WatchlistService` (`@Injectable({ providedIn: 'root' })`) que exponga dos signals reactivos: `selectedCoins` y `language`. Ambos cargan su estado inicial de `localStorage` al arrancar (con fallbacks a `['bitcoin', 'ethereum']` y `'en'` respectivamente) y utilizan `effect()` en el constructor para persistir automáticamente cada cambio. La página de mercado sincroniza la URL con el servicio: si la URL contiene `?coins=...`, actualiza el servicio; si no, redirige añadiendo la query persistida. Esto garantiza que la watchlist y el idioma sobreviven recargas, navegación y cierres de sesión sin acoplar las rutas al almacenamiento directo.
 
-## Requirements
+### [ADR-005] Resolución Declarativa de Búsquedas Multi-Moneda y Debounce
+*   **Contexto:** Los usuarios necesitaban comparar noticias de múltiples criptomonedas simultáneamente, pero la búsqueda solo aceptaba un término a la vez. Además, el debounce aplicado a todos los filtros (idioma, fechas, tamaño de página) introducía lag innecesario en controles que deberían ser instantáneos.
+*   **Decisión:**
+    *   **Búsqueda multi-moneda con OR:** Implementar un sistema de chips toggle en la UI de noticias donde cada clic alterna un término en una consulta compuesta separada por ` OR ` (ej: `bitcoin OR ethereum OR solana`). Se impone un límite de 3 términos simultáneos para mantener la relevancia de resultados. Los chips seleccionados permanecen siempre visibles en el panel de sugerencias para permitir su deselección.
+    *   **Separadores flexibles:** Los mocks del servidor y la lógica de parsing aceptan comas, puntos y comas, y el operador `OR` como delimitadores (`/(?:\s+or\s+|,|;)/i`), haciendo que `bitcoin, ethereum` y `bitcoin; solana` funcionen como consultas multi-moneda válidas.
+    *   **Debounce selectivo:** Solo el campo de texto de búsqueda aplica `debounceTime(350)` vía `toObservable`. Los demás filtros (idioma, fechas, pageSize, paginación) utilizan navegación inmediata a través de un helper `navigateWith()` que preserva y actualiza los query params existentes, eliminando el lag percibido en cambios de filtros.
 
-- Node.js `>=20.19.1`
-- npm `>=10`
+---
 
-## Local Setup
+## Stack Técnico
 
-1. Install dependencies:
-```bash
-npm ci
-```
+*   **Angular 21**: Componentes reactivos Zoneless, Signals, `@defer` y `rxResource`.
+*   **AnalogJS**: Meta-framework fullstack con rutas basadas en archivos y SSR.
+*   **Vite**: Motor de compilación rápido e integración de CSS mediante TailwindCSS v4.
+*   **ApexCharts / Ng-ApexCharts**: Graficación interactiva de cotizaciones de criptomonedas.
+*   **Vitest**: Suite de tests unitarios rápidos estructurada en múltiples proyectos.
+*   **Playwright**: Automatización y regresión E2E de Happy Path y Edge Cases.
 
-2. Create local environment file:
-```bash
-cp .env.example .env
-```
+---
 
-3. Run the app:
+## Instalación y Guía de Uso Local
+
+### 1. Iniciar Servidor de Desarrollo
 ```bash
 npm run dev
 ```
+*   Abre tu navegador en `http://localhost:5173/`
 
-## Available Scripts
-
-| Script | Description |
-| --- | --- |
-| `npm run dev` | Starts Analog/Vite dev server |
-| `npm run build` | Builds SSR client and server bundles |
-| `npm run test` | Runs Vitest once (Server & Logic) |
-| `npm run test:e2e` | Runs Playwright End-to-End Tests |
-| `npm run test:e2e:ui` | Runs Playwright tests with UI mode |
-
-## API & Endpoints
-
-- **`GET /api/v1/news`**: News search with query params (`q`, `language`, `from`, `to`, `pageSize`).
-- **`GET /api/v1/crypto`**: Quotes for assets (`ids`).
-- **`GET /api/v1/crypto/history`**: Asset historic data (`id`, `days`).
-
-## Docker & CI/CD
-
-**Docker:**
+### 2. Ejecutar Pruebas Unitarias (Vitest)
 ```bash
-docker build -t cryptofin-architect .
-docker run --env-file .env -p 8781:8781 cryptofin-architect
+npm run test
 ```
+*   Ejecuta las 47 pruebas en paralelo, dividiendo entornos entre el cliente (`jsdom`) y el servidor (`node`).
 
-**CI/CD Pipeline (GitHub Actions):**
-- Validates Node Modules caching.
-- Enforces Playwright dependencies.
-- Executes Vitest & Playwright matrix tests against `.env` Secrets.
-- Builds final SSR artifact for verification.
-- Deploys `dist/client` to GitHub Pages on pushes to `main`/`master`.
-- Uses repository subpath base `/cryptofin-architect/` during Pages builds.
+### 3. Ejecutar Pruebas E2E (Playwright)
+```bash
+npm run test:e2e
+```
+*   Inicia el servidor dev mockeado localmente y ejecuta las pruebas de integración.
 
-## Deployment Notes
+### 4. Compilar para Producción
+```bash
+# Compilación estándar
+npm run build
 
-- **GitHub Pages URL:** `https://lrangela.github.io/cryptofin-architect/`
-- **Pages artifact:** `dist/client`
-- **Full SSR/BFF deployment:** requires a platform capable of running the Analog/Nitro server output from `dist/analog/server` or `dist/ssr`
-- **Important:** the UI currently consumes local endpoints such as `/api/v1/news` and `/api/v1/crypto`; those endpoints are not executed by GitHub Pages
+# Compilación estática con destino a GitHub Pages
+DEPLOY_TARGET=github-pages npm run build
+```

@@ -1,0 +1,101 @@
+.suggestion-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.75rem;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(148, 163, 184, 0.04);
+  box-sizing: border-box;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #0f766e;
+}
+
+.chip-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  row-gap: 0.85rem;
+}
+
+.chip {
+  --coin-color: #0f766e;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.7);
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(148, 163, 184, 0.02);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.chip-button {
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(148, 163, 184, 0.08);
+  }
+}
+
+.chip-selected {
+  border-color: color-mix(in srgb, var(--coin-color) 40%, #cbd5e1);
+  background: color-mix(in srgb, var(--coin-color) 10%, #ffffff);
+  color: #0f172a;
+  box-shadow: 0 4px 10px rgba(148, 163, 184, 0.04);
+}
+
+.chip-hidden {
+  opacity: 0.4;
+}
+
+.coin-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--coin-color);
+  box-shadow: 0 0 8px var(--coin-color);
+  flex: none;
+}
+
+.chip-ticker {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.chip-name {
+  font-weight: 500;
+  color: #64748b;
+  font-size: 0.775rem;
+  border-left: 1px solid rgba(226, 232, 240, 0.8);
+  padding-left: 0.55rem;
+}
+
+@media (max-width: 640px) {
+  .suggestion-panel {
+    padding: 1.25rem;
+  }
+  .chip {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8rem;
+  }
+}

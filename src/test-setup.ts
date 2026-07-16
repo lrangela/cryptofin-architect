@@ -1,3 +1,5 @@
 import '@angular/compiler';
-// Testing Library se puede habilitar en el futuro cuando Angular 21 signals sean compatibles
-// import '@testing-library/jest-dom';
+import '@analogjs/vitest-angular/setup-snapshots';
+import { setupTestBed } from '@analogjs/vitest-angular/setup-testbed';
+
+setupTestBed();

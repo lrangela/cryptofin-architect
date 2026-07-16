@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { $fetch } from 'ofetch';
+import { logApiError } from './logger';
 
 export function getServerEnv() {
-  // En Analog/Nitro/Vite, las variables de .env se inyectan en process.env
-  // durante el desarrollo y deben configurarse como Secrets en CI/CD.
   const env = (
     globalThis as typeof globalThis & {
       process?: { env?: Record<string, string | undefined> };
@@ -55,13 +53,6 @@ export function getHttpStatusCode(error: unknown, fallback = 502): number {
   return fallback;
 }
 
-/**
- * Instancia de $fetch configurada para el servidor.
- * En Nitro/Analog, $fetch ya maneja:
- * - Parseo automático de JSON.
- * - Lanzamiento de errores para estados no-2xx.
- * - Timeouts y reintentos.
- */
 export const http = $fetch.create({
   retry: 2,
   timeout: 8000,
@@ -69,6 +60,7 @@ export const http = $fetch.create({
     accept: 'application/json',
   },
   onResponseError({ response }) {
-    console.error(`[HTTP Error] ${response.status}: ${response.statusText}`);
+    // Use structured logger instead of raw console.error
+    logApiError(`HTTP ${response.url}`, new Error(response.statusText), response.status);
   },
 });

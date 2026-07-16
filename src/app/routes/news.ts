@@ -1,18 +1,23 @@
-import { DatePipe, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   PLATFORM_ID,
   computed,
   effect,
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import type { RouteMeta } from '@analogjs/router';
+import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { NewsApiService } from '../features/news/news-api.service';
 import { NewsUiStateService } from '../features/news/news-ui-state.service';
+import { NewsArticleCardComponent } from '../features/news/components/news-article-card.component';
+import { WatchlistService } from '../shared/watchlist.service';
 import {
   MARKET_COIN_CATALOG,
   normalizeCoinId,
@@ -20,13 +25,15 @@ import {
 } from '../shared/market-coins';
 import type { NewsSearchParams } from '../shared/models/news.model';
 
+const MAX_TOPIC_SELECTIONS = 3;
+
 export const routeMeta: RouteMeta = {
   title: 'News',
 };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, NewsArticleCardComponent],
   host: {
     class: 'page-shell',
   },
@@ -34,14 +41,12 @@ export const routeMeta: RouteMeta = {
     <section class="page-panel">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Local API</p>
+          <p class="eyebrow">{{ t().eyebrow }}</p>
           <h1>News</h1>
-          <p class="page-copy">
-            Busca noticias usando tu endpoint local <code>/api/v1/news</code>.
-          </p>
+          <p class="page-copy">{{ t().pageCopy }}</p>
         </div>
 
-        <nav class="page-nav" aria-label="Secciones">
+        <nav class="page-nav" [attr.aria-label]="t().navLabel">
           <a
             routerLink="/news"
             [queryParams]="newsState.queryParams()"
@@ -53,40 +58,36 @@ export const routeMeta: RouteMeta = {
 
       <form class="toolbar" (submit)="$event.preventDefault()">
         <label class="field field-search">
-          <span>Buscar</span>
+          <span>{{ t().searchLabel }}</span>
           <input
             type="search"
             [value]="query()"
             (input)="query.set(getInputValue($event))"
-            placeholder="bitcoin, ethereum, markets..."
+            [placeholder]="t().searchPlaceholder"
           />
         </label>
 
         <label class="field">
-          <span>Idioma</span>
-          <select [value]="language()" (change)="language.set(getSelectValue($event) || 'en')">
+          <span>{{ t().languageLabel }}</span>
+          <select [value]="language()" (change)="onLanguageChange($event)">
             <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
-            <option value="it">Italiano</option>
-            <option value="pt">Português</option>
+            <option value="es">Espanol</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Desde</span>
-          <input type="date" [value]="from()" (input)="from.set(getInputValue($event))" />
+          <span>{{ t().fromLabel }}</span>
+          <input type="date" [value]="from()" (input)="onFromChange($event)" />
         </label>
 
         <label class="field">
-          <span>Hasta</span>
-          <input type="date" [value]="to()" (input)="to.set(getInputValue($event))" />
+          <span>{{ t().toLabel }}</span>
+          <input type="date" [value]="to()" (input)="onToChange($event)" />
         </label>
 
         <label class="field">
-          <span>Tamaño</span>
-          <select [value]="pageSize()" (change)="pageSize.set(getSelectNumber($event))">
+          <span>{{ t().pageSizeLabel }}</span>
+          <select [value]="pageSize()" (change)="onPageSizeChange($event)">
             <option [value]="10">10</option>
             <option [value]="20">20</option>
             <option [value]="50">50</option>
@@ -99,17 +100,22 @@ export const routeMeta: RouteMeta = {
             [routerLink]="['/market']"
             [queryParams]="{ coins: marketCoin }"
           >
-            Ver {{ symbolLabel(marketCoin) }} en Market
+            {{ t().viewInMarket(symbolLabel(marketCoin)) }}
           </a>
         }
       </form>
 
       @if (filteredSuggestions().length) {
-        <section class="suggestion-panel" aria-label="Sugerencias de búsqueda">
-          <p class="eyebrow">Temas relacionados</p>
+        <section class="suggestion-panel" [attr.aria-label]="t().suggestionsLabel">
+          <p class="eyebrow">{{ t().suggestionsTitle }}</p>
           <div class="chip-row">
             @for (suggestion of filteredSuggestions(); track suggestion) {
-              <button type="button" class="chip chip-button" (click)="setQuery(suggestion)">
+              <button
+                type="button"
+                class="chip chip-button"
+                [class.chip-selected]="isTopicSelected(suggestion)"
+                (click)="toggleTopic(suggestion)"
+              >
                 {{ suggestion }}
               </button>
             }
@@ -119,66 +125,55 @@ export const routeMeta: RouteMeta = {
 
       @if (!query().trim()) {
         <section class="state-card">
-          <h2>Empieza una búsqueda</h2>
-          <p>Escribe un término para consultar noticias desde el backend.</p>
+          <h2>{{ t().emptySearchTitle }}</h2>
+          <p>{{ t().emptySearchCopy }}</p>
         </section>
       } @else if (state().loading) {
         <section class="state-card">
-          <h2>Cargando noticias</h2>
-          <p>Consultando el endpoint local con debounce de 350 ms.</p>
+          <h2>{{ t().loadingTitle }}</h2>
+          <p>{{ t().loadingCopy }}</p>
         </section>
       } @else if (state().error; as error) {
         <section class="state-card state-error" aria-live="polite">
-          <h2>Error al cargar noticias</h2>
+          <h2>{{ t().errorTitle }}</h2>
           <p>{{ error }}</p>
         </section>
       } @else if (!articles().length && state().hasRequested) {
         <section class="state-card">
-          <h2>Sin resultados</h2>
-          <p>No se encontraron noticias para "{{ debouncedQuery() }}".</p>
+          <h2>{{ t().noResultsTitle }}</h2>
+          <p>{{ t().noResultsCopy(debouncedQuery()) }}</p>
         </section>
       } @else {
         @defer (on timer(0ms); prefetch on idle) {
-          <section class="news-grid" aria-label="Resultados de noticias">
+          <section class="news-grid" [attr.aria-label]="t().gridLabel">
             @for (article of paginatedArticles(); track article.url) {
-              <article class="news-card">
-                <p class="card-meta">
-                  <span>{{ article.source }}</span>
-                  <span>{{ article.publishedAt | date:'mediumDate' }}</span>
-                </p>
-                <h2>{{ article.title }}</h2>
-                <p>{{ article.description || 'Sin descripción disponible.' }}</p>
-                <a [href]="article.url" target="_blank" rel="noreferrer">Abrir noticia</a>
-              </article>
+              <app-news-article-card [article]="article" />
             }
           </section>
 
           @if (totalPages() > 1) {
-            <nav class="pagination" aria-label="Paginación de noticias">
+            <nav class="pagination" [attr.aria-label]="t().paginationLabel">
               <button
                 type="button"
                 class="page-btn"
                 [disabled]="page() <= 1"
                 (click)="goToPage(page() - 1)"
-                aria-label="Página anterior"
-              >&#8592; Anterior</button>
+                [attr.aria-label]="t().prevPage"
+              >&#8592; {{ t().prevBtn }}</button>
 
-              <span class="page-info">
-                Página <strong>{{ page() }}</strong> de <strong>{{ totalPages() }}</strong>
-                &nbsp;·&nbsp; {{ articles().length }} resultados
-              </span>
+              <span class="page-info" [innerHTML]="t().pageInfo(page(), totalPages(), articles().length)"></span>
 
               <button
                 type="button"
                 class="page-btn"
                 [disabled]="page() >= totalPages()"
                 (click)="goToPage(page() + 1)"
-                aria-label="Página siguiente"
-              >Siguiente &#8594;</button>
+                [attr.aria-label]="t().nextPage"
+              >{{ t().nextBtn }} &#8594;</button>
             </nav>
           }
         } @placeholder {
-          <section class="news-grid" aria-label="Cargando noticias">
+          <section class="news-grid" [attr.aria-label]="t().loadingGrid">
             @for (_ of [1, 2, 3, 4, 5]; track _; let i = $index) {
               <article class="news-card skeleton-card">
                 <div class="skeleton-line skeleton-title"></div>
@@ -189,11 +184,11 @@ export const routeMeta: RouteMeta = {
             }
           </section>
         } @loading {
-          <p class="loading-inline" aria-live="polite">Cargando más noticias...</p>
+          <p class="loading-inline" aria-live="polite">{{ t().loadingMore }}</p>
         } @error {
           <section class="state-card state-error">
-            <h2>Error al cargar noticias</h2>
-            <p>No se pudo cargar la lista de noticias. Intenta recargar la página.</p>
+            <h2>{{ t().errorTitle }}</h2>
+            <p>{{ t().errorLoadCopy }}</p>
           </section>
         }
       }
@@ -207,6 +202,8 @@ export default class NewsPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly watchlist = inject(WatchlistService);
   private readonly routeQuery = toSignal(this.route.queryParamMap, {
     initialValue: this.route.snapshot.queryParamMap,
   });
@@ -225,7 +222,7 @@ export default class NewsPage {
   ];
 
   readonly query = signal('');
-  readonly language = this.newsState.language;
+  readonly language = this.watchlist.language;
   readonly from = this.newsState.from;
   readonly to = this.newsState.to;
   readonly pageSize = this.newsState.pageSize;
@@ -233,6 +230,11 @@ export default class NewsPage {
 
   readonly debouncedQuery = computed(() => this.routeQuery().get('q')?.trim() ?? '');
   readonly itemsPerPage = 10;
+
+  readonly t = computed(() => {
+    const lang = this.watchlist.language();
+    return lang === 'es' ? NEWS_I18N.es : NEWS_I18N.en;
+  });
 
   private readonly params = computed<NewsSearchParams | null>(() => {
     const q = this.debouncedQuery();
@@ -243,7 +245,7 @@ export default class NewsPage {
 
     return {
       q,
-      language: this.language().trim() || 'en',
+      language: this.watchlist.language().trim() || 'en',
       from: this.from().trim() || undefined,
       to: this.to().trim() || undefined,
       pageSize: this.pageSize(),
@@ -275,19 +277,46 @@ export default class NewsPage {
   }));
 
   readonly filteredSuggestions = computed(() => {
-    const q = normalizeCoinId(this.query());
-    if (!q) {
-      return this.topicCatalog.slice(0, 6);
+    const raw = this.query().trim();
+    const activeTopics = raw
+      .split(/(?:\s+or\s+|,|;)/i)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    // No query at all: show default catalog
+    if (!raw) {
+      return this.topicCatalog.slice(0, 8);
     }
 
-    const exactMatch = this.topicCatalog.find((t) => t.toLowerCase() === q);
-    if (exactMatch) {
-      return [];
+    // Get the last term being typed (the one after the last OR/comma/semicolon)
+    const lastTerm = activeTopics[activeTopics.length - 1] ?? '';
+    const activeSet = new Set(activeTopics);
+
+    // Filter: always keep active topics + match last term against catalog
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    // First: always include active topics so user can deselect them
+    for (const topic of activeTopics) {
+      const match = this.topicCatalog.find((t) => t.toLowerCase() === topic);
+      if (match && !seen.has(match)) {
+        seen.add(match);
+        result.push(match);
+      }
     }
 
-    return this.topicCatalog
-      .filter((topic) => topic.toLowerCase().includes(q))
-      .slice(0, 6);
+    // Then: add catalog items matching the last term being typed
+    if (lastTerm) {
+      for (const topic of this.topicCatalog) {
+        if (seen.has(topic)) continue;
+        if (topic.toLowerCase().includes(lastTerm)) {
+          seen.add(topic);
+          result.push(topic);
+        }
+      }
+    }
+
+    return result.slice(0, 8);
   });
 
   readonly marketCoinLink = computed(() => {
@@ -296,6 +325,7 @@ export default class NewsPage {
   });
 
   constructor() {
+    // Hydrate state from route query params
     effect(() => {
       const params = this.routeQuery();
       this.newsState.hydrateFromRoute({
@@ -306,55 +336,111 @@ export default class NewsPage {
         pageSize: params.get('pageSize'),
         page: params.get('page'),
       });
-      // Sincronizar input query con el de la ruta al navegar (atrás/adelante)
       this.query.set(params.get('q') ?? '');
+
+      // Sync language from route to watchlist
+      const routeLang = params.get('language');
+      if (routeLang && routeLang !== this.watchlist.language()) {
+        this.watchlist.setLanguage(routeLang);
+      }
     });
 
-    effect((onCleanup) => {
-      const query = this.query();
-      const language = this.language();
-      const from = this.from();
-      const to = this.to();
-      const pageSize = this.pageSize();
-      const page = this.page();
+    // Debounced search-only sync: only the query input is debounced
+    toObservable(this.query)
+      .pipe(
+        debounceTime(350),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((searchVal) => {
+        this.navigateWith({ q: searchVal.trim() || null, page: 1 });
+      });
+  }
 
-      const timeoutId = setTimeout(() => {
-        const current = this.route.snapshot.queryParamMap;
-        const hasChanged = 
-          (query.trim() || null) !== (current.get('q') || null) ||
-          (language.trim() || 'en') !== (current.get('language') || 'en') ||
-          (from.trim() || null) !== (current.get('from') || null) ||
-          (to.trim() || null) !== (current.get('to') || null) ||
-          pageSize !== Number(current.get('pageSize') || 20) ||
-          page !== Number(current.get('page') || 1);
-
-        if (hasChanged) {
-          void this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams: {
-              q: query.trim() || null,
-              language: language.trim() || 'en',
-              from: from.trim() || null,
-              to: to.trim() || null,
-              pageSize,
-              page,
-            },
-            replaceUrl: true,
-          });
-        }
-      }, 350);
-
-      onCleanup(() => clearTimeout(timeoutId));
+  /**
+   * Immediate navigation helper — merges given params into current query params.
+   */
+  private navigateWith(partial: Record<string, string | number | null>): void {
+    const current = this.route.snapshot.queryParamMap;
+    const queryParams: Record<string, string | number | null> = {
+      q: current.get('q') || null,
+      language: current.get('language') || 'en',
+      from: current.get('from') || null,
+      to: current.get('to') || null,
+      pageSize: Number(current.get('pageSize') || 20),
+      page: Number(current.get('page') || 1),
+      ...partial,
+    };
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      replaceUrl: true,
     });
+  }
+
+  protected onLanguageChange(event: Event): void {
+    const val = this.getSelectValue(event) || 'en';
+    this.watchlist.setLanguage(val);
+    this.navigateWith({ language: val, page: 1 });
+  }
+
+  protected onFromChange(event: Event): void {
+    const val = this.getInputValue(event);
+    this.from.set(val);
+    this.navigateWith({ from: val.trim() || null, page: 1 });
+  }
+
+  protected onToChange(event: Event): void {
+    const val = this.getInputValue(event);
+    this.to.set(val);
+    this.navigateWith({ to: val.trim() || null, page: 1 });
+  }
+
+  protected onPageSizeChange(event: Event): void {
+    const val = this.getSelectNumber(event);
+    this.pageSize.set(val);
+    this.navigateWith({ pageSize: val, page: 1 });
   }
 
   protected goToPage(n: number): void {
     const clamped = Math.max(1, Math.min(n, this.totalPages()));
     this.page.set(clamped);
+    this.navigateWith({ page: clamped });
 
     if (isPlatformBrowser(this.platformId)) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  }
+
+  /**
+   * Toggle a topic in the search query using OR connectors.
+   * Enforces a maximum of MAX_TOPIC_SELECTIONS (3) simultaneous topics.
+   */
+  protected toggleTopic(topic: string): void {
+    const current = this.query().trim();
+    const parts = current.split(/(?:\s+or\s+|,|;)/i).map((s) => s.trim()).filter(Boolean);
+    const idx = parts.findIndex((p) => p.toLowerCase() === topic.toLowerCase());
+
+    if (idx >= 0) {
+      // Remove the topic
+      parts.splice(idx, 1);
+    } else {
+      // Enforce 3-coin limit
+      if (parts.length >= MAX_TOPIC_SELECTIONS) {
+        return;
+      }
+      parts.push(topic);
+    }
+
+    this.query.set(parts.join(' OR '));
+  }
+
+  /**
+   * Checks if a topic is currently active in the search query.
+   */
+  protected isTopicSelected(topic: string): boolean {
+    const parts = this.query().split(/(?:\s+or\s+|,|;)/i).map((s) => s.trim().toLowerCase());
+    return parts.includes(topic.toLowerCase());
   }
 
   protected getInputValue(event: Event): string {
@@ -369,11 +455,74 @@ export default class NewsPage {
     return (event.target as HTMLSelectElement).value;
   }
 
-  protected setQuery(suggestion: string): void {
-    this.query.set(suggestion);
-  }
-
   protected symbolLabel(id: string): string {
     return symbolLabel(id);
   }
 }
+
+const NEWS_I18N = {
+  en: {
+    eyebrow: 'Local API',
+    pageCopy: 'Search news using your local /api/v1/news endpoint.',
+    navLabel: 'Sections',
+    searchLabel: 'Search',
+    searchPlaceholder: 'bitcoin, ethereum OR solana...',
+    languageLabel: 'Language',
+    fromLabel: 'From',
+    toLabel: 'To',
+    pageSizeLabel: 'Page size',
+    viewInMarket: (ticker: string) => `View ${ticker} in Market`,
+    suggestionsLabel: 'Search suggestions',
+    suggestionsTitle: 'Related topics',
+    emptySearchTitle: 'Start a search',
+    emptySearchCopy: 'Type a term to query news from the backend.',
+    loadingTitle: 'Loading news',
+    loadingCopy: 'Querying the local endpoint with 350ms debounce.',
+    errorTitle: 'Error loading news',
+    noResultsTitle: 'No results',
+    noResultsCopy: (q: string) => `No news found for "${q}".`,
+    gridLabel: 'News results',
+    paginationLabel: 'News pagination',
+    prevPage: 'Previous page',
+    prevBtn: 'Previous',
+    nextPage: 'Next page',
+    nextBtn: 'Next',
+    pageInfo: (page: number, total: number, count: number) =>
+      `Page <strong>${page}</strong> of <strong>${total}</strong> &nbsp;&middot;&nbsp; ${count} results`,
+    loadingGrid: 'Loading news',
+    loadingMore: 'Loading more news...',
+    errorLoadCopy: 'Could not load the news list. Try reloading the page.',
+  },
+  es: {
+    eyebrow: 'API Local',
+    pageCopy: 'Busca noticias usando tu endpoint local /api/v1/news.',
+    navLabel: 'Secciones',
+    searchLabel: 'Buscar',
+    searchPlaceholder: 'bitcoin, ethereum OR solana...',
+    languageLabel: 'Idioma',
+    fromLabel: 'Desde',
+    toLabel: 'Hasta',
+    pageSizeLabel: 'Tamano',
+    viewInMarket: (ticker: string) => `Ver ${ticker} en Market`,
+    suggestionsLabel: 'Sugerencias de busqueda',
+    suggestionsTitle: 'Temas relacionados',
+    emptySearchTitle: 'Empieza una busqueda',
+    emptySearchCopy: 'Escribe un termino para consultar noticias desde el backend.',
+    loadingTitle: 'Cargando noticias',
+    loadingCopy: 'Consultando el endpoint local con debounce de 350 ms.',
+    errorTitle: 'Error al cargar noticias',
+    noResultsTitle: 'Sin resultados',
+    noResultsCopy: (q: string) => `No se encontraron noticias para "${q}".`,
+    gridLabel: 'Resultados de noticias',
+    paginationLabel: 'Paginacion de noticias',
+    prevPage: 'Pagina anterior',
+    prevBtn: 'Anterior',
+    nextPage: 'Pagina siguiente',
+    nextBtn: 'Siguiente',
+    pageInfo: (page: number, total: number, count: number) =>
+      `Pagina <strong>${page}</strong> de <strong>${total}</strong> &nbsp;&middot;&nbsp; ${count} resultados`,
+    loadingGrid: 'Cargando noticias',
+    loadingMore: 'Cargando mas noticias...',
+    errorLoadCopy: 'No se pudo cargar la lista de noticias. Intenta recargar la pagina.',
+  },
+} as const;

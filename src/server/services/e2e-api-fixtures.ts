@@ -60,6 +60,37 @@ const NEWS_FIXTURES: NewsArticle[] = [
   },
 ];
 
+const NEWS_FIXTURES_ES: NewsArticle[] = [
+  {
+    title: 'Los flujos de ETF de Bitcoin se mantienen estables mientras la volatilidad disminuye',
+    description: 'La demanda institucional se sostiene mientras los operadores rotan hacia criptoactivos de gran capitalización.',
+    url: 'https://example.com/news/bitcoin-etf-flows-es',
+    source: 'Crypto Daily',
+    publishedAt: '2026-03-09T15:30:00.000Z',
+  },
+  {
+    title: 'Desarrolladores de Ethereum delinean el próximo hito de actualización',
+    description: 'Los contribuyentes principales compartieron el plan de despliegue para el próximo paquete de mejoras de la red.',
+    url: 'https://example.com/news/ethereum-upgrade-es',
+    source: 'Chain Journal',
+    publishedAt: '2026-03-08T18:00:00.000Z',
+  },
+  {
+    title: 'El ecosistema de Solana ve una actividad renovada en aplicaciones de consumo',
+    description: 'Las nuevas integraciones de billeteras y las tarifas más bajas continúan atrayendo a usuarios minoristas.',
+    url: 'https://example.com/news/solana-consumer-apps-es',
+    source: 'BlockWire',
+    publishedAt: '2026-03-07T10:15:00.000Z',
+  },
+  {
+    title: 'Los mercados de criptomonedas digieren datos macroeconómicos antes de las declaraciones de la Fed',
+    description: 'Bitcoin y Ethereum cotizaron en un rango estrecho mientras los inversores esperaban señales de política monetaria.',
+    url: 'https://example.com/news/macro-fed-crypto-es',
+    source: 'Market Pulse',
+    publishedAt: '2026-03-06T12:45:00.000Z',
+  },
+];
+
 export function isE2EMockApiEnabled(): boolean {
   return process.env['E2E_MOCK_API'] === 'true';
 }
@@ -90,12 +121,16 @@ export function getMockHistory(id: string, days: number): CryptoHistorySeries {
 }
 
 export function getMockNews(params: NewsSearchParams): NewsArticle[] {
+  const isSpanish = params.language === 'es';
+  const fixtures = isSpanish ? NEWS_FIXTURES_ES : NEWS_FIXTURES;
   const query = params.q.trim().toLowerCase();
-  const filtered = NEWS_FIXTURES.filter((article) => {
+  const keywords = query.split(/(?:\s+or\s+|,|;)/i).map((k) => k.trim()).filter(Boolean);
+
+  const filtered = fixtures.filter((article) => {
     const haystack = `${article.title} ${article.description}`.toLowerCase();
-    return haystack.includes(query);
+    return keywords.some((kw) => haystack.includes(kw));
   });
 
-  const articles = filtered.length > 0 ? filtered : NEWS_FIXTURES;
+  const articles = filtered.length > 0 ? filtered : fixtures;
   return articles.slice(0, params.pageSize);
 }

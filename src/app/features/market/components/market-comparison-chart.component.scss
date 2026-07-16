@@ -108,3 +108,14 @@ p {
   display: grid;
   gap: 0.45rem;
 }
+
+.scale-warning {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 0.85rem;
+  font-weight: 600;
+}

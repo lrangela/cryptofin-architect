@@ -21,6 +21,13 @@ vi.mock('../../http', () => ({
   http: httpMock,
 }));
 
+vi.mock('../../logger', () => ({
+  logProviderStart: vi.fn(),
+  logProviderSuccess: vi.fn(),
+  logProviderError: vi.fn(),
+  logApiError: vi.fn(),
+}));
+
 import {
   fetchNewsArticles,
   normalizeNewsArticle,
@@ -97,7 +104,7 @@ describe('newsapi.provider', () => {
       expect.objectContaining<Partial<NewsProviderError>>({
         statusCode: 429,
         errorCode: 'NEWS_RATE_LIMIT',
-        message: 'NewsAPI rate limit exceeded.',
+        message: 'Límite de peticiones alcanzado. Intenta de nuevo más tarde.',
       }),
     );
   });

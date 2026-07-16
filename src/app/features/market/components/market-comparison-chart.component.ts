@@ -104,6 +104,10 @@ type ComparisonChartOptions = {
           <p class="loading-note">Actualizando grafica...</p>
         }
 
+        @if (scaleWarning()) {
+          <p class="scale-warning" role="alert">{{ scaleWarning() }}</p>
+        }
+
         <apx-chart
           [series]="chartSeries()"
           [chart]="options().chart"
@@ -134,6 +138,31 @@ export class MarketComparisonChartComponent {
   readonly toggleSeries = output<string>();
   readonly isBrowser = isPlatformBrowser(this.platformId);
   readonly displayMode = signal<'normalized' | 'absolute'>('normalized');
+
+  /**
+   * Detects extreme price disparity between visible series.
+   * When ratio > 100x, absolute USD mode flattens low-value coins to zero.
+   */
+  readonly hasExtremeDisparity = computed(() => {
+    const visible = this.allSeries().filter(
+      (item) => this.visibleIds().includes(item.id) && item.points.length > 0,
+    );
+    if (visible.length < 2) return false;
+
+    const prices = visible.map((s) => s.points[s.points.length - 1]?.priceUsd ?? 0).filter((p) => p > 0);
+    if (prices.length < 2) return false;
+
+    const max = Math.max(...prices);
+    const min = Math.min(...prices);
+    return max / min > 100;
+  });
+
+  readonly scaleWarning = computed(() => {
+    if (this.displayMode() === 'absolute' && this.hasExtremeDisparity()) {
+      return 'Diferencia de precio extrema (>100x). El modo % es más legible para comparar activos con precios muy dispares.';
+    }
+    return null;
+  });
 
   readonly chartSeries = computed<ApexAxisChartSeries>(() =>
     this.allSeries()
@@ -196,7 +225,7 @@ export class MarketComparisonChartComponent {
           value === undefined
             ? ''
             : this.displayMode() === 'normalized'
-              ? `${value.toFixed(2)}%`
+              ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
               : `$${value.toLocaleString('en-US')}`,
       },
     },
@@ -213,7 +242,7 @@ export class MarketComparisonChartComponent {
         style: { colors: '#6b7280' },
         formatter: (value: number) =>
           this.displayMode() === 'normalized'
-            ? `${value.toFixed(0)}%`
+            ? `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`
             : `$${value.toLocaleString('en-US')}`,
       },
     },
@@ -234,7 +263,7 @@ export class MarketComparisonChartComponent {
       x: new Date(point.timestamp).getTime(),
       y:
         this.displayMode() === 'normalized'
-          ? Number(((point.priceUsd / basePrice) * 100).toFixed(2))
+          ? Number((((point.priceUsd - basePrice) / basePrice) * 100).toFixed(2))
           : Number(point.priceUsd.toFixed(2)),
     }));
   }

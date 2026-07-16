@@ -3,6 +3,7 @@ import type {
   NewsSearchParams,
 } from '../../../../app/shared/models/news.model';
 import { buildApiUrl, getHttpStatusCode, getServerEnv, http } from '../../http';
+import { logApiError, logProviderError, logProviderStart, logProviderSuccess } from '../../logger';
 
 interface NewsApiArticle {
   source: {
@@ -73,36 +74,48 @@ export async function fetchNewsArticles(
   const apiBaseUrl = env['NEWSAPI_BASE_URL'] ?? 'https://newsapi.org/v2/';
 
   if (!apiKey) {
+    // Log real error server-side, return generic message to client
+    logApiError('/api/v1/news', new Error('NEWSAPI_KEY is not configured'), 503);
     throw new NewsProviderError(
-      502,
+      503,
       'NEWS_PROVIDER_ERROR',
-      'NEWSAPI_KEY is not configured on the server.',
+      'Servicio temporalmente no disponible.',
     );
   }
 
   const url = buildApiUrl(apiBaseUrl, 'everything');
+  const timing = Date.now();
+
+  logProviderStart('NewsAPI', '/everything', { q: params.q, language: params.language });
 
   try {
+    // Send API key securely via header instead of query parameter (OWASP)
     const data = await http<NewsApiResponse>(url, {
+      headers: {
+        'X-Api-Key': apiKey,
+      },
       query: {
         q: params.q,
         language: params.language,
         from: params.from,
         to: params.to,
         pageSize: params.pageSize,
-        apiKey,
       },
     });
 
+    logProviderSuccess('NewsAPI', '/everything', Date.now() - timing, data.articles.length);
     return data.articles.map(normalizeNewsArticle);
   } catch (error: unknown) {
     const statusCode = getHttpStatusCode(error);
+    logProviderError('NewsAPI', '/everything', error, Date.now() - timing);
 
     if (statusCode === 401) {
+      // Mask the internal detail — don't expose key validation issues to client
+      logApiError('/api/v1/news', error, 401);
       throw new NewsProviderError(
         401,
         'NEWS_UNAUTHORIZED',
-        'NewsAPI rejected the configured API key.',
+        'Servicio de noticias no disponible temporalmente.',
       );
     }
 
@@ -110,14 +123,14 @@ export async function fetchNewsArticles(
       throw new NewsProviderError(
         429,
         'NEWS_RATE_LIMIT',
-        'NewsAPI rate limit exceeded.',
+        'Límite de peticiones alcanzado. Intenta de nuevo más tarde.',
       );
     }
 
     throw new NewsProviderError(
       502,
       'NEWS_PROVIDER_ERROR',
-      'News provider request failed.',
+      'Servicio de noticias no disponible.',
     );
   }
 }

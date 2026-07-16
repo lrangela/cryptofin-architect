@@ -4,8 +4,8 @@ test.describe('Edge Cases - News UI', () => {
   test('debe mostrar estado inicial cuando no hay busqueda', async ({ page }) => {
     await page.goto('/news', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByRole('heading', { name: 'Empieza una búsqueda' })).toBeVisible();
-    await expect(page.getByText('Escribe un término para consultar noticias')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Start a search' })).toBeVisible();
+    await expect(page.getByText('Type a term to query news from the backend.')).toBeVisible();
   });
 
   test('debe mostrar el input de busqueda', async ({ page }) => {
@@ -17,7 +17,7 @@ test.describe('Edge Cases - News UI', () => {
   test('debe mostrar sugerencias de busqueda', async ({ page }) => {
     await page.goto('/news', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText('TEMAS RELACIONADOS')).toBeVisible();
+    await expect(page.getByText('Related topics')).toBeVisible();
   });
 });
 

@@ -1,13 +1,17 @@
-import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import type { RouteMeta } from '@analogjs/router';
 import { MarketComparisonChartComponent } from '../features/market/components/market-comparison-chart.component';
+import { MarketCoinCardComponent } from '../features/market/components/market-coin-card.component';
+import { CoinExplorerPanelComponent } from '../features/market/components/coin-explorer-panel.component';
 import { MarketApiService } from '../features/market/market-api.service';
+import { WatchlistService } from '../shared/watchlist.service';
 import {
   MARKET_COIN_CATALOG,
+  COIN_TICKER_MAP,
   normalizeCoinId,
+  resolveCoinId,
   parseMarketCoinsParam,
   symbolLabel,
 } from '../shared/market-coins';
@@ -24,10 +28,9 @@ export const routeMeta: RouteMeta = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    CurrencyPipe,
-    DecimalPipe,
-    DatePipe,
     MarketComparisonChartComponent,
+    MarketCoinCardComponent,
+    CoinExplorerPanelComponent,
   ],
   host: {
     class: 'page-shell',
@@ -36,14 +39,12 @@ export const routeMeta: RouteMeta = {
     <section class="page-panel">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Local API</p>
+          <p class="eyebrow">{{ t().eyebrow }}</p>
           <h1>Market</h1>
-          <p class="page-copy">
-            Compara varias coins sobre la misma grafica usando tus endpoints locales.
-          </p>
+          <p class="page-copy">{{ t().pageCopy }}</p>
         </div>
 
-        <nav class="page-nav" aria-label="Secciones">
+        <nav class="page-nav" [attr.aria-label]="t().navLabel">
           <a routerLink="/news">News</a>
           <a routerLink="/market" aria-current="page">Market</a>
         </nav>
@@ -51,7 +52,7 @@ export const routeMeta: RouteMeta = {
 
       <section class="toolbar">
         <div class="watchlist-summary">
-          <span class="eyebrow">Coins activas</span>
+          <span class="eyebrow">{{ t().activeCoins }}</span>
           <div class="active-coin-row">
             @for (item of selectedCoins(); track item) {
               <div
@@ -68,7 +69,7 @@ export const routeMeta: RouteMeta = {
                   class="active-coin-remove"
                   [disabled]="selectedCoins().length <= 1"
                   (click)="removeCoin(item)"
-                  aria-label="Quitar coin"
+                  [attr.aria-label]="t().removeCoin"
                 >
                   ×
                 </button>
@@ -78,18 +79,18 @@ export const routeMeta: RouteMeta = {
         </div>
 
         <label class="field field-search">
-          <span>Buscar y agregar</span>
+          <span>{{ t().searchLabel }}</span>
           <input
             type="search"
             [value]="coinQuery()"
             (input)="coinQuery.set(getInputValue($event))"
             (keydown.enter)="addCoinFromQuery()"
-            placeholder="bitcoin, solana, dogecoin..."
+            [placeholder]="t().searchPlaceholder"
           />
         </label>
 
         <label class="range-control">
-          <span>Rango</span>
+          <span>{{ t().rangeLabel }}</span>
           <select [value]="chartDays()" (change)="chartDays.set(getDaysValue($event))">
             @for (days of availableRanges; track days) {
               <option [value]="days">{{ daysLabel(days) }}</option>
@@ -98,45 +99,35 @@ export const routeMeta: RouteMeta = {
         </label>
 
         @if (state().refreshing) {
-          <p class="loading-inline" aria-live="polite">Actualizando...</p>
+          <p class="loading-inline" aria-live="polite">{{ t().refreshing }}</p>
         }
       </section>
 
       @if (coinOptions().length) {
-        <section class="suggestion-panel" aria-label="Busqueda de coins">
-          <p class="eyebrow">Busqueda</p>
-          <div class="chip-row">
-            @for (coin of coinOptions(); track coin) {
-              <button
-                type="button"
-                class="chip chip-button"
-                [class.chip-selected]="selectedCoins().includes(coin)"
-                [class.chip-hidden]="selectedCoins().includes(coin) && !visibleCoins().includes(coin)"
-                [style.--coin-color]="colorForCoin(coin)"
-                (click)="selectSuggestion(coin)"
-              >
-                <span class="coin-dot"></span>
-                <span>{{ symbolLabel(coin) }}</span>
-              </button>
-            }
-          </div>
-        </section>
+        <app-coin-explorer-panel
+          [coins]="coinOptions()"
+          [selected]="selectedCoins()"
+          [visible]="visibleCoins()"
+          [colorMap]="coinColors()"
+          [isSearching]="!!coinQuery()"
+          (coinSelected)="selectSuggestion($event)"
+        />
       }
 
       @if (state().loading && !quotes().length) {
         <section class="state-card">
-          <h2>Cargando mercado</h2>
-          <p>Consultando precios e historico para la seleccion actual.</p>
+          <h2>{{ t().loadingTitle }}</h2>
+          <p>{{ t().loadingCopy }}</p>
         </section>
       } @else if (state().error; as error) {
         <section class="state-card state-error" aria-live="polite">
-          <h2>Error al cargar precios</h2>
+          <h2>{{ t().errorTitle }}</h2>
           <p>{{ error }}</p>
         </section>
       } @else if (!selectedCoins().length) {
         <section class="state-card">
-          <h2>Seleccion vacia</h2>
-          <p>No hubo datos para los activos solicitados.</p>
+          <h2>{{ t().emptyTitle }}</h2>
+          <p>{{ t().emptyCopy }}</p>
         </section>
       } @else {
         @defer (on timer(0ms)) {
@@ -149,44 +140,34 @@ export const routeMeta: RouteMeta = {
             (toggleSeries)="toggleCoinVisibility($any($event))"
           />
         } @placeholder {
-          <section class="chart-shell chart-placeholder" aria-label="Cargando grafico">
+          <section class="chart-shell chart-placeholder" [attr.aria-label]="t().chartLoading">
             <div class="skeleton-loader">
               <div class="skeleton-line"></div>
               <div class="skeleton-line"></div>
               <div class="skeleton-line"></div>
               <div class="skeleton-chart-area"></div>
             </div>
-            <p class="loading-note">Cargando gráfico...</p>
+            <p class="loading-note">{{ t().chartLoading }}</p>
           </section>
         } @loading {
-          <section class="chart-shell chart-placeholder" aria-label="Preparando gráfico">
-            <p class="loading-note">Preparando visualización...</p>
+          <section class="chart-shell chart-placeholder" [attr.aria-label]="t().chartPreparing">
+            <p class="loading-note">{{ t().chartPreparing }}</p>
           </section>
         } @error {
           <section class="state-card state-error">
-            <h2>Error al cargar el gráfico</h2>
-            <p>No se pudo cargar la visualización. Intenta recargar la página.</p>
+            <h2>{{ t().chartError }}</h2>
+            <p>{{ t().chartErrorCopy }}</p>
           </section>
         }
 
-        <section class="market-grid" aria-label="Tarjetas del mercado">
-          @for (quote of orderedQuotes(); track quote.id) {
-            <article class="market-card" [class.card-dimmed]="!visibleCoins().includes(quote.id)">
-              <div class="market-card-header">
-                <div>
-                  <p class="eyebrow">{{ symbolLabel(quote.id) }}</p>
-                  <h2>{{ quote.id }}</h2>
-                </div>
-                <p [class.positive]="quote.change24h >= 0" [class.negative]="quote.change24h < 0">
-                  {{ quote.change24h >= 0 ? '+' : '' }}{{ quote.change24h | number:'1.2-2' }}%
-                </p>
-              </div>
-
-              <p class="market-price">{{ quote.priceUsd | currency:'USD':'symbol':'1.2-2' }}</p>
-              <p class="market-time">
-                Actualizado: {{ quote.lastUpdated | date:'mediumTime' }}
-              </p>
-            </article>
+        <section class="market-grid" [attr.aria-label]="t().gridLabel">
+          @for (coinId of selectedCoins(); track coinId) {
+            <app-market-coin-card
+              [coinId]="coinId"
+              [quote]="quoteForCoin(coinId)"
+              [color]="colorForCoin(coinId)"
+              [dimmed]="!visibleCoins().includes(coinId)"
+            />
           }
         </section>
       }
@@ -198,6 +179,7 @@ export default class MarketPage {
   private readonly marketApi = inject(MarketApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly watchlist = inject(WatchlistService);
   protected readonly availableRanges = [1, 7, 30] as const;
   private readonly colorPalette = ['#0f766e', '#2563eb', '#dc2626', '#7c3aed', '#ea580c', '#0891b2'];
   private readonly coinCatalog = [...MARKET_COIN_CATALOG];
@@ -214,10 +196,15 @@ export default class MarketPage {
     const routeCoins = parseMarketCoinsParam(routeParam).filter((coin) =>
       (this.coinCatalog as readonly string[]).includes(coin),
     );
-    return routeCoins.length ? routeCoins : ['bitcoin', 'ethereum'];
+    return routeCoins.length ? routeCoins : this.watchlist.selectedCoins();
   });
 
   readonly visibleCoins = signal(['bitcoin', 'ethereum']);
+
+  readonly t = computed(() => {
+    const lang = this.watchlist.language();
+    return lang === 'es' ? MARKET_I18N.es : MARKET_I18N.en;
+  });
 
   private readonly request = computed(() => ({
     ids: this.selectedCoins(),
@@ -272,15 +259,15 @@ export default class MarketPage {
       null,
   }));
 
-  readonly orderedQuotes = computed(() =>
-    this.selectedCoins()
-      .map((id) => this.quotes().find((quote) => quote.id === id))
-      .filter((quote): quote is CryptoQuote => !!quote),
-  );
-
   readonly coinOptions = computed(() => {
     const query = normalizeCoinId(this.coinQuery());
-    const matches = this.coinCatalog.filter((coin) => !query || coin.includes(query));
+    const matches = this.coinCatalog.filter((coin) => {
+      if (!query) {
+        return true;
+      }
+      const ticker = (COIN_TICKER_MAP[coin] ?? '').toLowerCase();
+      return coin.includes(query) || ticker.includes(query);
+    });
     const matchList = matches as readonly string[];
     const selectedFirst = [
       ...this.selectedCoins().filter((coin) => matchList.includes(coin)),
@@ -290,6 +277,7 @@ export default class MarketPage {
   });
 
   constructor() {
+    // Sync visible coins with selected coins
     effect(() => {
       const coins = this.selectedCoins();
       this.visibleCoins.update(current => {
@@ -298,6 +286,21 @@ export default class MarketPage {
         return [...next, ...missing];
       });
     });
+
+    // Persist selected coins to WatchlistService when route has coins param
+    effect(() => {
+      const coins = this.selectedCoins();
+      const routeParam = this.routeCoins().get('coins');
+      if (routeParam) {
+        this.watchlist.setCoins(coins);
+      }
+    });
+
+    // If no coins param in URL, redirect to include persisted coins
+    if (!this.route.snapshot.queryParamMap.has('coins')) {
+      const persisted = this.watchlist.selectedCoins();
+      this.updateRoute(persisted);
+    }
   }
 
   protected getInputValue(event: Event): string {
@@ -305,12 +308,12 @@ export default class MarketPage {
   }
 
   protected addCoinFromQuery(): void {
-    const coin = normalizeCoinId(this.coinQuery());
-    if (!coin) {
+    const resolved = resolveCoinId(this.coinQuery());
+    if (!resolved) {
       return;
     }
 
-    this.addCoin(coin);
+    this.addCoin(resolved);
   }
 
   protected selectSuggestion(coin: string): void {
@@ -332,14 +335,14 @@ export default class MarketPage {
   }
 
   protected addCoin(coin: string): void {
-    const normalizedCoin = normalizeCoinId(coin);
-    if (!normalizedCoin) {
+    const resolved = resolveCoinId(coin);
+    if (!resolved) {
       return;
     }
 
     const current = this.selectedCoins();
-    if (!current.includes(normalizedCoin)) {
-      this.updateRoute([...current, normalizedCoin]);
+    if (!current.includes(resolved)) {
+      this.updateRoute([...current, resolved]);
     }
     this.coinQuery.set('');
   }
@@ -380,11 +383,11 @@ export default class MarketPage {
   }
 
   protected daysLabel(days: number): string {
+    const lang = this.watchlist.language();
     if (days === 1) {
-      return '24 horas';
+      return lang === 'es' ? '24 horas' : '24 hours';
     }
-
-    return `${days} dias`;
+    return lang === 'es' ? `${days} dias` : `${days} days`;
   }
 
   protected symbolLabel(id: string): string {
@@ -394,4 +397,53 @@ export default class MarketPage {
   protected colorForCoin(id: string): string {
     return this.coinColors()[id] ?? '#0f766e';
   }
+
+  protected quoteForCoin(id: string): CryptoQuote | undefined {
+    return this.quotes().find((q) => q.id === id);
+  }
 }
+
+const MARKET_I18N = {
+  en: {
+    eyebrow: 'Local API',
+    pageCopy: 'Compare multiple coins on the same chart using your local endpoints.',
+    navLabel: 'Sections',
+    activeCoins: 'Active coins',
+    removeCoin: 'Remove coin',
+    searchLabel: 'Search and add',
+    searchPlaceholder: 'bitcoin, solana, dogecoin...',
+    rangeLabel: 'Range',
+    refreshing: 'Refreshing...',
+    loadingTitle: 'Loading market',
+    loadingCopy: 'Fetching prices and history for the current selection.',
+    errorTitle: 'Error loading prices',
+    emptyTitle: 'Empty selection',
+    emptyCopy: 'No data for the requested assets.',
+    chartLoading: 'Loading chart...',
+    chartPreparing: 'Preparing visualization...',
+    chartError: 'Error loading chart',
+    chartErrorCopy: 'Could not load the visualization. Try reloading the page.',
+    gridLabel: 'Market cards',
+  },
+  es: {
+    eyebrow: 'API Local',
+    pageCopy: 'Compara varias coins sobre la misma grafica usando tus endpoints locales.',
+    navLabel: 'Secciones',
+    activeCoins: 'Coins activas',
+    removeCoin: 'Quitar coin',
+    searchLabel: 'Buscar y agregar',
+    searchPlaceholder: 'bitcoin, solana, dogecoin...',
+    rangeLabel: 'Rango',
+    refreshing: 'Actualizando...',
+    loadingTitle: 'Cargando mercado',
+    loadingCopy: 'Consultando precios e historico para la seleccion actual.',
+    errorTitle: 'Error al cargar precios',
+    emptyTitle: 'Seleccion vacia',
+    emptyCopy: 'No hubo datos para los activos solicitados.',
+    chartLoading: 'Cargando grafico...',
+    chartPreparing: 'Preparando visualizacion...',
+    chartError: 'Error al cargar el grafico',
+    chartErrorCopy: 'No se pudo cargar la visualizacion. Intenta recargar la pagina.',
+    gridLabel: 'Tarjetas del mercado',
+  },
+} as const;

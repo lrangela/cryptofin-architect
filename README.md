@@ -1,5 +1,6 @@
 # CryptoFin Architect — High-Performance Financial Intelligence Platform
 
+[![Live Demo](https://img.shields.io/badge/Demo-Live%20Preview-blueviolet?style=for-the-badge&logo=github)](https://lrangela.github.io/cryptofin-architect/)
 [![Reactivity](https://img.shields.io/badge/Reactivity-Signals%20%26%20rxResource-red?style=for-the-badge)](#arquitectura)
 [![Framework](https://img.shields.io/badge/Framework-AnalogJS-orange?style=for-the-badge)](#stack-tecnico)
 [![Backend](https://img.shields.io/badge/BFF-Nitro-blue?style=for-the-badge)](#stack-tecnico)
@@ -28,7 +29,7 @@ graph TD
         MarketResource -->|Loaded Quotes| ActiveCard["MarketCoinCardComponent (Active State)"]
         
         %% User Interaction
-        SearchInput["CoinExplorerPanelComponent (Search Input)"] -->|resolveCoinId() / Tickers & Names| MarketPage
+        SearchInput["CoinExplorerPanelComponent (Search Input)"] -->|resolveCoinId / Tickers & Names| MarketPage
     end
 
     %% Network Boundary
